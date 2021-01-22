@@ -17,10 +17,11 @@ logging.basicConfig(level=logging.DEBUG)
 
 class Collector:
 
-    def __init__(self, topic_name):
+    def __init__(self, topic_name, wait_interval):
         self.session: Session = requests.Session()
         self.root_endpoint: str = 'https://data.toulouse-metropole.fr'
         self.topic_name = topic_name
+        self.wait_interval = wait_interval
         self.load_config()
         self.load_last_data_params()
 
@@ -44,7 +45,7 @@ class Collector:
                     for row in data:
                         self.push_to_pubsub(self.clean_row(row, station))
 
-            time.sleep(3)
+            time.sleep(self.wait_interval)
 
     def get_data(self, slug, start_date, max_rows=100):
 
@@ -165,7 +166,8 @@ class Collector:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--topic_name", type=str, default="projects/toulouse-meteo-data/topics/meteo-observations")
+    parser.add_argument("--wait_interval", type=int, help='Wait interval in seconds', required=True)
 
     args = parser.parse_args()
-    c = Collector(args.topic_name)
+    c = Collector(args.topic_name, args.wait_interval)
     c.start()
