@@ -145,8 +145,8 @@ class Collector:
             "x_l93": attributes.get('x_l93', None),
             "y_l93": attributes.get('y_l93', None),
             "geometry": {
-                "x": round(row.get('geometry', {}).get('x', None), 9) if row.get('geometry', {}).get('x', None) is not None else None,
-                "y": round(row.get('geometry', {}).get('y', None), 9) if row.get('geometry', {}).get('y', None) is not None else None
+                "x": None, # round(row.get('geometry', {}).get('x', None), 9) if row.get('geometry', {}).get('x', None) is not None else None,
+                "y": None, # round(row.get('geometry', {}).get('y', None), 9) if row.get('geometry', {}).get('y', None) is not None else None
             }
         }
         return new_row
