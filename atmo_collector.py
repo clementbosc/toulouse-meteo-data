@@ -36,49 +36,61 @@ class Collector:
         # infinite loop
         while True:
             data = self.get_data()
+            print(len(data))
+
             if len(data) > 0:
+                last_data_date_candidates = list(sorted(data, key=lambda i: i['date_debut'], reverse=True))
+                last_data_date = last_data_date_candidates[0]['date_debut']
+                self.set_last_date(last_data_date)
 
-                data = list(map(self.clean_row, data))
-                data = list(filter(lambda x: x['date_debut'] > self.last_data, data))
-
-                if len(data) > 0:
-                    last_data_date_candidates = list(sorted(data, key=lambda i: i['date_debut'], reverse=True))
-                    last_data_date = last_data_date_candidates[0]['date_debut']
-                    self.set_last_date(last_data_date)
-
-                    for row in data:
-                        row.update({'date_debut': row['date_debut'].strftime('%Y-%m-%d %H:%M:%S'),
-                                    'date_fin': row['date_fin'].strftime('%Y-%m-%d %H:%M:%S')})
-                        self.push_to_pubsub(row)
+                for row in data:
+                    row.update({'date_debut': row['date_debut'].strftime('%Y-%m-%d %H:%M:%S'),
+                                'date_fin': row['date_fin'].strftime('%Y-%m-%d %H:%M:%S')})
+                    self.push_to_pubsub(row)
 
             time.sleep(self.wait_interval)
 
     def get_data(self):
-        # todo greater than last data date
-        url: str = "https://services9.arcgis.com/7Sr9Ek9c1QTKmbwr/arcgis/rest/services/mesures_occitanie_72h_poll_princ" \
-                   "/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json"
-        # Mesure_temps_reel_Region_Occitanie_Polluants_Reglementaires
-        url = "https://services9.arcgis.com/7Sr9Ek9c1QTKmbwr/ArcGIS/rest/services/" \
-              "mesures_occitanie_72h_poll_princ/FeatureServer/0/query" \
-              "?where=1%3D1&outFields=*&f=json&orderByFields=date_debut+desc"
-        # "&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&" \
-        # "spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&" \
-        # "returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&" \
-        # "multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&" \
-        # "applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&" \
-        # "returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&" \
-        # "orderByFields=date_debut+desc&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&" \
-        # "resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&" \
-        # "quantizationParameters=&sqlFormat=standard&f=pjson&token="
-        data: List[Any] = []
+        res_per_page = 1000
 
-        logging.debug(f'Fetching {url}')
+        all_data = []
+
+        # 1. first get total_results
+        url = "https://services9.arcgis.com/7Sr9Ek9c1QTKmbwr/ArcGIS/rest/services/Mesure_horaire_(30j)_Region_Occitanie_Polluants_Reglementaires_1/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=true&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pjson&token="
         r: Response = self.session.get(url)
-        if r.status_code != 200:
-            logging.warning(f'HTTP {r.status_code} : {r.content}')
+        total_count = r.json().get('count')
 
-        content: Any = r.json()
-        return content.get('features')
+        loop: bool = True
+        i = 0
+        while loop:
+            url = f"https://services9.arcgis.com/7Sr9Ek9c1QTKmbwr/ArcGIS/rest/services/Mesure_horaire_(30j)_Region_Occitanie_Polluants_Reglementaires_1/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=date_debut+desc&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset={i*res_per_page}&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pjson&token="
+            r: Response = self.session.get(url)
+            if r.status_code != 200:
+                logging.warning(f'HTTP {r.status_code} : {r.content}')
+
+            content: Any = r.json()
+            data = list(map(self.clean_row, content.get('features')))
+
+            if data[-1].get('date_debut') < self.last_data:
+                loop = False
+
+            all_data.extend(data)
+            i += 1
+
+        return list(filter(lambda x: x['date_debut'] > self.last_data, all_data))
+
+        # 2. for each offset part
+        # for i in range(0, (total_count // 1000) + 1):
+        #     url = f"https://services9.arcgis.com/7Sr9Ek9c1QTKmbwr/ArcGIS/rest/services/Mesure_horaire_(30j)_Region_Occitanie_Polluants_Reglementaires_1/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryPoint&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset={i*res_per_page}&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pjson&token="
+#
+        #     logging.debug(f'Fetching {url}')
+        #     r: Response = self.session.get(url)
+        #     if r.status_code != 200:
+        #         logging.warning(f'HTTP {r.status_code} : {r.content}')
+#
+        #     content: Any = r.json()
+        #     all_data.extend(content.get('features'))
+        # return all_data
 
     def load_last_data_params(self, using_bq=True):
         self.last_data = None
