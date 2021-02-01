@@ -15,6 +15,20 @@ from google.cloud.bigquery import QueryJob
 from google.cloud.pubsub_v1 import PublisherClient
 from requests import Response, Session
 
+
+# Imports the Cloud Logging client library
+import google.cloud.logging
+
+# Instantiates a client
+client = google.cloud.logging.Client()
+
+# Retrieves a Cloud Logging handler based on the environment
+# you're running in and integrates the handler with the
+# Python logging module. By default this captures all logs
+# at INFO level and higher
+client.get_default_handler()
+client.setup_logging()
+
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -174,7 +188,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--topic_name", type=str, default="projects/toulouse-meteo-data/topics/air-observations")
     parser.add_argument("--wait_interval", type=int, help='Wait interval in seconds', required=True)
-
     args = parser.parse_args()
     c = Collector(args.topic_name, args.wait_interval)
     c.start()
