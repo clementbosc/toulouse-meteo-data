@@ -41,16 +41,10 @@ class Collector:
 
         self.load_last_data_params()
 
-    def test(self, row):
-        # lambda x: x['date_debut'] > self.last_data
-        print(row['date_debut'], self.last_data)
-        return row['date_debut'] > self.last_data
-
     def start(self):
         # infinite loop
         while True:
             data = self.get_data()
-            print(len(data))
 
             if len(data) > 0:
                 last_data_date_candidates = list(sorted(data, key=lambda i: i['date_debut'], reverse=True))
